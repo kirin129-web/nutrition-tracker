@@ -1,0 +1,1613 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>1日の栄養素チェッカー</title>
+
+  <!-- ===== PWA対応 ===== -->
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#27ae60">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="栄養チェッカー">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+
+  <!-- OGP（SNSシェア用） -->
+  <meta property="og:title" content="1日の栄養素チェッカー">
+  <meta property="og:description" content="献立を入力して不足栄養素を可視化。食事摂取基準(2025年版)準拠。">
+  <meta property="og:type" content="website">
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Helvetica Neue', Arial, 'Hiragino Kaku Gothic ProN', Meiryo, sans-serif;
+      background: #f5f7fa;
+      color: #333;
+      min-height: 100vh;
+    }
+    header {
+      background: linear-gradient(135deg, #2ecc71, #27ae60);
+      color: white;
+      padding: 20px 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    header h1 { font-size: 1.4rem; font-weight: 700; }
+    header p { font-size: 0.8rem; opacity: 0.85; margin-top: 4px; }
+
+    .container { max-width: 1100px; margin: 0 auto; padding: 24px 16px; }
+
+    /* プロフィール設定 */
+    .profile-card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+      margin-bottom: 20px;
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .profile-card label { font-size: 0.85rem; font-weight: 600; color: #555; }
+    .profile-card select {
+      margin-left: 8px;
+      padding: 6px 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      background: #fafafa;
+    }
+
+    /* 食事入力 */
+    .meals-section {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+      margin-bottom: 20px;
+    }
+    .meals-section h2 { font-size: 1rem; font-weight: 700; margin-bottom: 16px; color: #2ecc71; }
+    .meal-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .meal-tab {
+      padding: 8px 16px;
+      border-radius: 20px;
+      border: 2px solid #e0e0e0;
+      background: white;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .meal-tab.active {
+      background: #2ecc71;
+      border-color: #2ecc71;
+      color: white;
+    }
+    .meal-inputs { display: flex; flex-direction: column; gap: 12px; }
+    .food-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .food-row input[type="text"] {
+      flex: 1;
+      min-width: 140px;
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 0.9rem;
+    }
+    .food-row input[type="number"] {
+      width: 80px;
+      padding: 8px 10px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 0.9rem;
+    }
+    .food-row .unit { font-size: 0.8rem; color: #888; }
+    .food-row .remove-btn {
+      background: #fee;
+      color: #e74c3c;
+      border: none;
+      border-radius: 6px;
+      padding: 6px 10px;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+    .add-food-btn {
+      background: #f0fff4;
+      color: #27ae60;
+      border: 2px dashed #27ae60;
+      border-radius: 8px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 600;
+      width: 100%;
+      margin-top: 8px;
+    }
+    .add-food-btn:hover { background: #e6ffe9; }
+    .analyze-btn {
+      background: linear-gradient(135deg, #2ecc71, #27ae60);
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 14px 32px;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 16px;
+      transition: opacity 0.2s;
+      box-shadow: 0 4px 12px rgba(46,204,113,0.3);
+    }
+    .analyze-btn:hover { opacity: 0.9; }
+
+    /* 結果エリア */
+    #results { display: none; }
+    .results-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+    @media(max-width: 700px) { .results-grid { grid-template-columns: 1fr; } }
+
+    .result-card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    }
+    .result-card h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 16px; color: #555; }
+
+    /* 充足率バー */
+    .nutrient-bar-list { display: flex; flex-direction: column; gap: 10px; }
+    .nutrient-bar-item { }
+    .nutrient-bar-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.8rem;
+      margin-bottom: 4px;
+    }
+    .nutrient-name { font-weight: 600; }
+    .nutrient-pct {
+      font-weight: 700;
+    }
+    .pct-low { color: #e74c3c; }
+    .pct-ok { color: #2ecc71; }
+    .pct-over { color: #f39c12; }
+    .bar-bg {
+      background: #eee;
+      border-radius: 6px;
+      height: 10px;
+      overflow: hidden;
+    }
+    .bar-fill {
+      height: 100%;
+      border-radius: 6px;
+      transition: width 0.6s ease;
+    }
+    .bar-low { background: #e74c3c; }
+    .bar-ok { background: #2ecc71; }
+    .bar-over { background: #f39c12; }
+
+    /* おすすめ食材 */
+    .recommend-section {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+      margin-bottom: 20px;
+    }
+    .recommend-section h2 { font-size: 1rem; font-weight: 700; margin-bottom: 16px; color: #e67e22; }
+    .deficient-list { display: flex; flex-direction: column; gap: 16px; }
+    .deficient-item {
+      border-left: 4px solid #e74c3c;
+      padding-left: 14px;
+    }
+    .deficient-item h4 { font-size: 0.9rem; font-weight: 700; color: #333; margin-bottom: 6px; }
+    .deficient-item .tags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .food-tag {
+      background: #fff3e0;
+      color: #e67e22;
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+    .chart-container { position: relative; height: 320px; }
+
+    /* サマリーバッジ */
+    .summary-badges {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .badge {
+      border-radius: 10px;
+      padding: 14px 20px;
+      flex: 1;
+      min-width: 120px;
+      text-align: center;
+    }
+    .badge-red { background: #fde8e8; }
+    .badge-green { background: #e8fdf0; }
+    .badge-orange { background: #fef3e2; }
+    .badge .num { font-size: 1.6rem; font-weight: 800; }
+    .badge-red .num { color: #e74c3c; }
+    .badge-green .num { color: #27ae60; }
+    .badge-orange .num { color: #e67e22; }
+    .badge p { font-size: 0.75rem; color: #666; margin-top: 2px; }
+
+    .source-note {
+      font-size: 0.72rem;
+      color: #aaa;
+      text-align: right;
+      margin-top: 8px;
+    }
+    .loading { text-align: center; padding: 24px; color: #888; font-size: 0.9rem; }
+
+    /* ===== 保存モーダル ===== */
+    .modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      width: 100%;
+      max-width: 420px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+      animation: modalIn 0.2s ease;
+    }
+    @keyframes modalIn {
+      from { transform: translateY(20px); opacity: 0; }
+      to   { transform: translateY(0);    opacity: 1; }
+    }
+    .modal h3 {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 16px;
+      color: #333;
+    }
+    .modal-checks {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .modal-check-label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border: 2px solid #e8e8e8;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      font-size: 0.88rem;
+      font-weight: 600;
+    }
+    .modal-check-label:has(input:checked) {
+      border-color: #27ae60;
+      background: #f0fff4;
+    }
+    .modal-check-label input[type="checkbox"] {
+      width: 18px; height: 18px;
+      accent-color: #27ae60;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .modal-check-label .check-icon { font-size: 1.1rem; }
+    .modal-check-label .check-desc {
+      font-size: 0.75rem;
+      font-weight: 400;
+      color: #888;
+      margin-top: 2px;
+    }
+    .modal-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .modal-btn {
+      flex: 1;
+      padding: 11px;
+      border-radius: 10px;
+      border: none;
+      font-size: 0.88rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .modal-btn:hover { opacity: 0.85; }
+    .modal-btn-cancel {
+      background: #f0f0f0;
+      color: #666;
+    }
+    .modal-btn-copy {
+      background: #3498db;
+      color: white;
+    }
+    .modal-btn-save {
+      background: #27ae60;
+      color: white;
+    }
+    .modal-toast {
+      margin-top: 12px;
+      padding: 8px 14px;
+      border-radius: 8px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      display: none;
+      text-align: center;
+    }
+    .modal-toast.success {
+      background: #e8fdf0;
+      color: #27ae60;
+      display: block;
+    }
+
+    /* 分析後の保存ボタンエリア */
+    .save-bar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+    .save-bar-btn {
+      flex: 1;
+      min-width: 140px;
+      padding: 12px 16px;
+      border-radius: 10px;
+      border: none;
+      font-size: 0.88rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .save-bar-btn:hover { opacity: 0.88; }
+    .save-bar-btn:active { transform: scale(0.97); }
+    .save-bar-btn-copy { background: #ebf5fb; color: #2980b9; }
+    .save-bar-btn-dl   { background: #eafaf1; color: #1e8449; }
+
+    /* ===== チャットボット ===== */
+    .chat-section {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+      margin-bottom: 20px;
+      overflow: hidden;
+    }
+    .chat-header {
+      background: linear-gradient(135deg, #3498db, #2980b9);
+      color: white;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .chat-header h2 { font-size: 0.95rem; font-weight: 700; flex: 1; }
+    .chat-toggle-icon { font-size: 0.8rem; transition: transform 0.3s; }
+    .chat-toggle-icon.open { transform: rotate(180deg); }
+    .chat-body { display: none; flex-direction: column; height: 380px; }
+    .chat-body.open { display: flex; }
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      background: #f9fafb;
+    }
+    .chat-msg {
+      max-width: 85%;
+      padding: 10px 14px;
+      border-radius: 16px;
+      font-size: 0.85rem;
+      line-height: 1.6;
+      white-space: pre-wrap;
+    }
+    .chat-msg.bot {
+      background: white;
+      border: 1px solid #e0e0e0;
+      align-self: flex-start;
+      border-bottom-left-radius: 4px;
+    }
+    .chat-msg.user {
+      background: #3498db;
+      color: white;
+      align-self: flex-end;
+      border-bottom-right-radius: 4px;
+    }
+    .chat-msg .msg-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      margin-bottom: 4px;
+      opacity: 0.7;
+    }
+    .chat-suggestions {
+      padding: 8px 12px;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      background: #f0f4f8;
+      border-top: 1px solid #e8e8e8;
+    }
+    .suggestion-chip {
+      background: white;
+      border: 1px solid #3498db;
+      color: #3498db;
+      border-radius: 16px;
+      padding: 4px 12px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .suggestion-chip:hover { background: #3498db; color: white; }
+    .chat-input-row {
+      display: flex;
+      gap: 8px;
+      padding: 12px 16px;
+      border-top: 1px solid #eee;
+      background: white;
+    }
+    .chat-input-row input {
+      flex: 1;
+      padding: 9px 14px;
+      border: 1.5px solid #ddd;
+      border-radius: 20px;
+      font-size: 0.88rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .chat-input-row input:focus { border-color: #3498db; }
+    .chat-send-btn {
+      background: #3498db;
+      color: white;
+      border: none;
+      border-radius: 20px;
+      padding: 9px 18px;
+      font-size: 0.85rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+    .chat-send-btn:hover { opacity: 0.85; }
+  </style>
+</head>
+<body>
+
+<!-- PWAインストールバナー（Androidで自動表示） -->
+<div id="installBanner" style="display:none; background:#1a8a48; color:white; padding:12px 20px; align-items:center; gap:12px; flex-wrap:wrap; justify-content:space-between;">
+  <span style="font-size:0.88rem;">📲 ホーム画面に追加してアプリとして使えます！</span>
+  <div style="display:flex;gap:8px;">
+    <button onclick="installApp()" style="background:white;color:#1a8a48;border:none;border-radius:6px;padding:6px 16px;font-weight:700;cursor:pointer;font-size:0.85rem;">インストール</button>
+    <button onclick="document.getElementById('installBanner').style.display='none'" style="background:transparent;color:white;border:1px solid rgba(255,255,255,0.5);border-radius:6px;padding:6px 12px;cursor:pointer;font-size:0.85rem;">後で</button>
+  </div>
+</div>
+
+<header>
+  <h1>🥗 1日の栄養素チェッカー</h1>
+  <p>献立を入力して、不足栄養素を可視化 ／ 厚生労働省「日本人の食事摂取基準(2025年版)」準拠</p>
+</header>
+
+<div class="container">
+
+  <!-- プロフィール -->
+  <div class="profile-card">
+    <div>
+      <label>性別
+        <select id="sex">
+          <option value="male">男性</option>
+          <option value="female">女性</option>
+        </select>
+      </label>
+    </div>
+    <div>
+      <label>年齢層
+        <select id="ageGroup">
+          <option value="18-29">18〜29歳</option>
+          <option value="30-49">30〜49歳</option>
+          <option value="50-64">50〜64歳</option>
+          <option value="65-74">65〜74歳</option>
+        </select>
+      </label>
+    </div>
+    <div>
+      <label>身体活動レベル
+        <select id="activity">
+          <option value="low">低い（デスクワーク中心）</option>
+          <option value="mid" selected>ふつう（適度な運動あり）</option>
+          <option value="high">高い（活発な運動習慣あり）</option>
+        </select>
+      </label>
+    </div>
+  </div>
+
+  <!-- 食事入力 -->
+  <div class="meals-section">
+    <h2>📝 今日の献立を入力</h2>
+    <div class="meal-tabs">
+      <button class="meal-tab active" onclick="switchMeal('breakfast')">☀️ 朝食</button>
+      <button class="meal-tab" onclick="switchMeal('lunch')">🌤 昼食</button>
+      <button class="meal-tab" onclick="switchMeal('dinner')">🌙 夕食</button>
+      <button class="meal-tab" onclick="switchMeal('snack')">🍵 間食</button>
+    </div>
+    <div id="mealInputArea" class="meal-inputs"></div>
+    <button class="add-food-btn" onclick="addFoodRow()">＋ 食材を追加</button>
+    <button class="analyze-btn" onclick="analyzeNutrition()">📊 栄養素を分析する</button>
+  </div>
+
+  <!-- 結果 -->
+  <div id="results">
+
+    <!-- 保存バー -->
+    <div class="save-bar">
+      <button class="save-bar-btn save-bar-btn-copy" onclick="openSaveModal('copy')">
+        📋 クリップボードにコピー
+      </button>
+      <button class="save-bar-btn save-bar-btn-dl" onclick="openSaveModal('download')">
+        💾 テキストで保存
+      </button>
+    </div>
+
+    <div class="summary-badges" id="summaryBadges"></div>
+
+    <div class="results-grid">
+      <div class="result-card">
+        <h3>📊 栄養素充足率（レーダーチャート）</h3>
+        <div class="chart-container">
+          <canvas id="radarChart"></canvas>
+        </div>
+      </div>
+      <div class="result-card">
+        <h3>📈 各栄養素の充足状況</h3>
+        <div id="nutrientBars" class="nutrient-bar-list"></div>
+      </div>
+    </div>
+
+    <div class="recommend-section" id="recommendSection">
+      <h2>🍽 不足栄養素を補うおすすめ食材</h2>
+      <div id="deficientList" class="deficient-list"></div>
+    </div>
+
+    <p class="source-note">※ 推奨量は厚生労働省「日本人の食事摂取基準(2025年版)」に基づきます。栄養素計算は文部科学省「日本食品標準成分表(2023年版)」参考値を使用しています。</p>
+  </div>
+
+  <!-- ===== 栄養・食材チャット ===== -->
+  <div class="chat-section">
+    <div class="chat-header" onclick="toggleChat()">
+      <span style="font-size:1.2rem">🤖</span>
+      <h2>栄養・食材なんでも質問</h2>
+      <span class="chat-toggle-icon open" id="chatToggleIcon">▲</span>
+    </div>
+    <div class="chat-body open" id="chatBody">
+      <div class="chat-messages" id="chatMessages">
+        <div class="chat-msg bot">
+          <div class="msg-label">🤖 栄養アシスタント</div>
+          こんにちは！食材の重さや栄養素について何でも聞いてください😊<br><br>
+          例えば…<br>
+          ・「納豆1パックは何g？」<br>
+          ・「ビタミンCが多い食材は？」<br>
+          ・「卵のカロリーは？」
+        </div>
+      </div>
+      <div class="chat-suggestions" id="chatSuggestions">
+        <span class="suggestion-chip" onclick="sendSuggestion(this)">納豆1パックは何g？</span>
+        <span class="suggestion-chip" onclick="sendSuggestion(this)">卵1個は何g？</span>
+        <span class="suggestion-chip" onclick="sendSuggestion(this)">ご飯1膳は何g？</span>
+        <span class="suggestion-chip" onclick="sendSuggestion(this)">鉄分が多い食材は？</span>
+        <span class="suggestion-chip" onclick="sendSuggestion(this)">ビタミンCが多い食材は？</span>
+        <span class="suggestion-chip" onclick="sendSuggestion(this)">食物繊維が多い食材は？</span>
+        <span class="suggestion-chip" onclick="sendSuggestion(this)">カルシウムが多い食材は？</span>
+        <span class="suggestion-chip" onclick="sendSuggestion(this)">タンパク質が多い食材は？</span>
+      </div>
+      <div class="chat-input-row">
+        <input type="text" id="chatInput" placeholder="質問を入力（例：バナナ1本は何g？）" onkeydown="if(event.key==='Enter')sendChat()">
+        <button class="chat-send-btn" onclick="sendChat()">送信</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ===== 保存モーダル ===== -->
+<div class="modal-overlay" id="saveModal">
+  <div class="modal">
+    <h3>📤 保存する内容を選んでください</h3>
+    <div class="modal-checks">
+      <label class="modal-check-label">
+        <input type="checkbox" id="chk-menu" checked>
+        <span class="check-icon">🍽</span>
+        <div>
+          <div>今日の献立</div>
+          <div class="check-desc">朝食・昼食・夕食・間食の食材と量</div>
+        </div>
+      </label>
+      <label class="modal-check-label">
+        <input type="checkbox" id="chk-result" checked>
+        <span class="check-icon">📊</span>
+        <div>
+          <div>栄養素分析結果</div>
+          <div class="check-desc">各栄養素の充足率・摂取量・目標量</div>
+        </div>
+      </label>
+      <label class="modal-check-label">
+        <input type="checkbox" id="chk-recommend" checked>
+        <span class="check-icon">🥗</span>
+        <div>
+          <div>おすすめ食材</div>
+          <div class="check-desc">不足栄養素を補うための食材リスト</div>
+        </div>
+      </label>
+    </div>
+    <div class="modal-actions" id="modalActions"></div>
+    <div class="modal-toast" id="modalToast"></div>
+  </div>
+</div>
+
+<script>
+// =====================================================
+// 1日推奨摂取量データ（日本人の食事摂取基準2025年版）
+// =====================================================
+const DRI = {
+  male: {
+    "18-29": { energy: 2650, protein: 65, fat: 74, carb: 370, fiber: 21, vitA: 900, vitD: 8.5, vitE: 6.0, vitK: 150, vitB1: 1.4, vitB2: 1.6, vitB6: 1.4, vitB12: 2.4, vitC: 100, folate: 240, calcium: 800, iron: 7.5, zinc: 11, magnesium: 340, potassium: 2500, sodium_max: 7500 },
+    "30-49": { energy: 2700, protein: 65, fat: 75, carb: 375, fiber: 21, vitA: 900, vitD: 8.5, vitE: 6.0, vitK: 150, vitB1: 1.4, vitB2: 1.6, vitB6: 1.4, vitB12: 2.4, vitC: 100, folate: 240, calcium: 750, iron: 7.5, zinc: 11, magnesium: 370, potassium: 2500, sodium_max: 7500 },
+    "50-64": { energy: 2600, protein: 65, fat: 72, carb: 360, fiber: 21, vitA: 900, vitD: 8.5, vitE: 7.0, vitK: 150, vitB1: 1.3, vitB2: 1.5, vitB6: 1.4, vitB12: 2.4, vitC: 100, folate: 240, calcium: 750, iron: 7.5, zinc: 11, magnesium: 370, potassium: 2500, sodium_max: 7500 },
+    "65-74": { energy: 2400, protein: 60, fat: 67, carb: 335, fiber: 20, vitA: 850, vitD: 8.5, vitE: 7.0, vitK: 150, vitB1: 1.2, vitB2: 1.4, vitB6: 1.4, vitB12: 2.4, vitC: 100, folate: 240, calcium: 750, iron: 7.5, zinc: 10, magnesium: 350, potassium: 2500, sodium_max: 7500 },
+  },
+  female: {
+    "18-29": { energy: 2000, protein: 50, fat: 56, carb: 280, fiber: 18, vitA: 700, vitD: 8.5, vitE: 5.0, vitK: 150, vitB1: 1.1, vitB2: 1.2, vitB6: 1.1, vitB12: 2.4, vitC: 100, folate: 240, calcium: 650, iron: 10.5, zinc: 8, magnesium: 270, potassium: 2000, sodium_max: 6500 },
+    "30-49": { energy: 2050, protein: 50, fat: 57, carb: 285, fiber: 18, vitA: 700, vitD: 8.5, vitE: 5.5, vitK: 150, vitB1: 1.1, vitB2: 1.2, vitB6: 1.1, vitB12: 2.4, vitC: 100, folate: 240, calcium: 650, iron: 10.5, zinc: 8, magnesium: 290, potassium: 2000, sodium_max: 6500 },
+    "50-64": { energy: 1950, protein: 50, fat: 54, carb: 270, fiber: 18, vitA: 700, vitD: 8.5, vitE: 6.0, vitK: 150, vitB1: 1.1, vitB2: 1.2, vitB6: 1.1, vitB12: 2.4, vitC: 100, folate: 240, calcium: 650, iron: 11.0, zinc: 8, magnesium: 290, potassium: 2000, sodium_max: 6500 },
+    "65-74": { energy: 1850, protein: 50, fat: 52, carb: 258, fiber: 17, vitA: 700, vitD: 8.5, vitE: 6.5, vitK: 150, vitB1: 1.0, vitB2: 1.1, vitB6: 1.1, vitB12: 2.4, vitC: 100, folate: 240, calcium: 650, iron: 11.0, zinc: 8, magnesium: 280, potassium: 2000, sodium_max: 6500 },
+  }
+};
+
+// 活動レベル補正係数
+const ACTIVITY_FACTOR = { low: 0.85, mid: 1.0, high: 1.2 };
+
+// 栄養素表示名と単位
+const NUTRIENT_META = {
+  energy:    { label: 'エネルギー', unit: 'kcal', icon: '⚡' },
+  protein:   { label: 'タンパク質', unit: 'g',    icon: '🥩' },
+  fat:       { label: '脂質',       unit: 'g',    icon: '🧈' },
+  carb:      { label: '炭水化物',   unit: 'g',    icon: '🍚' },
+  fiber:     { label: '食物繊維',   unit: 'g',    icon: '🥦' },
+  vitA:      { label: 'ビタミンA',  unit: 'μgRAE', icon: '🥕' },
+  vitD:      { label: 'ビタミンD',  unit: 'μg',   icon: '☀️' },
+  vitE:      { label: 'ビタミンE',  unit: 'mg',   icon: '🌿' },
+  vitK:      { label: 'ビタミンK',  unit: 'μg',   icon: '🥬' },
+  vitB1:     { label: 'ビタミンB1', unit: 'mg',   icon: '🌾' },
+  vitB2:     { label: 'ビタミンB2', unit: 'mg',   icon: '🥛' },
+  vitB6:     { label: 'ビタミンB6', unit: 'mg',   icon: '🐟' },
+  vitB12:    { label: 'ビタミンB12',unit: 'μg',   icon: '🦪' },
+  vitC:      { label: 'ビタミンC',  unit: 'mg',   icon: '🍊' },
+  folate:    { label: '葉酸',       unit: 'μg',   icon: '🥑' },
+  calcium:   { label: 'カルシウム', unit: 'mg',   icon: '🥛' },
+  iron:      { label: '鉄',         unit: 'mg',   icon: '🫀' },
+  zinc:      { label: '亜鉛',       unit: 'mg',   icon: '🦐' },
+  magnesium: { label: 'マグネシウム',unit: 'mg',  icon: '🌰' },
+  potassium: { label: 'カリウム',   unit: 'mg',   icon: '🍌' },
+};
+
+// 不足時のおすすめ食材
+const FOOD_RECOMMENDATIONS = {
+  energy:    ['ご飯', 'パン', 'パスタ', 'じゃがいも', 'バナナ'],
+  protein:   ['鶏むね肉', '豆腐', '卵', '鮭', 'ギリシャヨーグルト', '納豆'],
+  fat:       ['アボカド', 'くるみ', 'オリーブオイル', 'サーモン', '亜麻仁油'],
+  carb:      ['白米', 'さつまいも', 'そば', '全粒粉パン', 'バナナ'],
+  fiber:     ['ごぼう', 'オートミール', 'ブロッコリー', 'キウイ', '乾燥プルーン', '押し麦'],
+  vitA:      ['にんじん', 'かぼちゃ', 'ほうれん草', 'うなぎ', 'レバー', '小松菜'],
+  vitD:      ['鮭', 'さんま', 'しらす', 'きのこ類', 'いわし', '卵黄'],
+  vitE:      ['アーモンド', 'ひまわり油', 'かぼちゃ', 'アボカド', '松の実'],
+  vitK:      ['納豆', 'ほうれん草', 'ブロッコリー', '小松菜', 'モロヘイヤ'],
+  vitB1:     ['豚肉', '玄米', '枝豆', '大豆', 'ごま', 'うなぎ'],
+  vitB2:     ['レバー', 'うなぎ', '卵', '牛乳', 'ほうれん草', 'アーモンド'],
+  vitB6:     ['まぐろ', '鶏肉', 'バナナ', 'じゃがいも', 'ごま', 'ピスタチオ'],
+  vitB12:    ['あさり', 'しじみ', 'ほっけ', 'さんま', '牛レバー', '卵'],
+  vitC:      ['赤パプリカ', 'キウイ', 'ブロッコリー', 'いちご', 'アセロラ', '柑橘類'],
+  folate:    ['枝豆', 'ほうれん草', 'アスパラ', 'ブロッコリー', '大豆', 'いちご'],
+  calcium:   ['牛乳', 'チーズ', '豆腐', 'ひじき', '小松菜', 'しらす', 'ヨーグルト'],
+  iron:      ['レバー', 'あさり', '納豆', 'ひじき', '小松菜', 'プルーン', '牛赤身肉'],
+  zinc:      ['牡蠣', '牛赤身肉', 'カシューナッツ', '豆腐', 'ごま', '高野豆腐'],
+  magnesium: ['豆腐', '玄米', 'アーモンド', 'ほうれん草', 'バナナ', 'わかめ', 'ごま'],
+  potassium: ['バナナ', 'アボカド', 'じゃがいも', 'ほうれん草', 'ひじき', '豆類'],
+};
+
+// =====================================================
+// 食品栄養成分データ（100gあたり）
+// =====================================================
+const FOOD_DB = {
+  // 主食
+  'ご飯':        { energy:168, protein:2.5, fat:0.3, carb:37.1, fiber:0.3, vitA:0,   vitD:0,   vitE:0,   vitK:0,   vitB1:0.02, vitB2:0.01, vitB6:0.02, vitB12:0,    vitC:0,  folate:3,   calcium:3,   iron:0.1, zinc:0.6, magnesium:11,  potassium:29 },
+  '食パン':      { energy:248, protein:8.9, fat:4.1, carb:46.4, fiber:2.3, vitA:0,   vitD:0,   vitE:0.4, vitK:6,   vitB1:0.08, vitB2:0.06, vitB6:0.04, vitB12:0,    vitC:0,  folate:30,  calcium:22,  iron:0.5, zinc:0.8, magnesium:20,  potassium:97 },
+  'パスタ(茹で)':{ energy:150, protein:5.8, fat:0.9, carb:30.3, fiber:1.5, vitA:0,   vitD:0,   vitE:0.2, vitK:0,   vitB1:0.04, vitB2:0.02, vitB6:0.03, vitB12:0,    vitC:0,  folate:6,   calcium:8,   iron:0.7, zinc:0.7, magnesium:19,  potassium:56 },
+  'うどん(茹で)': { energy:105, protein:2.6, fat:0.4, carb:22.0, fiber:0.8, vitA:0,   vitD:0,   vitE:0,   vitK:0,   vitB1:0.02, vitB2:0.01, vitB6:0.02, vitB12:0,    vitC:0,  folate:5,   calcium:7,   iron:0.2, zinc:0.2, magnesium:7,   potassium:9 },
+  'そば(茹で)':  { energy:132, protein:4.8, fat:1.0, carb:26.0, fiber:2.0, vitA:0,   vitD:0,   vitE:0.3, vitK:0,   vitB1:0.06, vitB2:0.02, vitB6:0.05, vitB12:0,    vitC:0,  folate:13,  calcium:12,  iron:0.8, zinc:0.4, magnesium:27,  potassium:34 },
+  'オートミール': { energy:380, protein:13.7,fat:5.7, carb:69.1, fiber:9.4, vitA:0,   vitD:0,   vitE:0.6, vitK:0,   vitB1:0.20, vitB2:0.07, vitB6:0.10, vitB12:0,    vitC:0,  folate:30,  calcium:47,  iron:3.9, zinc:2.1, magnesium:100, potassium:260 },
+  '玄米(炊いた)':{ energy:165, protein:2.8, fat:1.0, carb:35.6, fiber:1.4, vitA:0,   vitD:0,   vitE:0.5, vitK:0,   vitB1:0.16, vitB2:0.02, vitB6:0.21, vitB12:0,    vitC:0,  folate:10,  calcium:7,   iron:0.6, zinc:0.8, magnesium:49,  potassium:95 },
+
+  // 肉類
+  '鶏むね肉':    { energy:116, protein:23.3, fat:1.9, carb:0,   fiber:0,   vitA:8,   vitD:0.1, vitE:0.3, vitK:11,  vitB1:0.09, vitB2:0.10, vitB6:0.64, vitB12:0.2,  vitC:3,  folate:9,   calcium:3,   iron:0.3, zinc:0.7, magnesium:27,  potassium:340 },
+  '鶏もも肉':    { energy:190, protein:17.3, fat:14.2,carb:0,   fiber:0,   vitA:47,  vitD:0.1, vitE:0.4, vitK:60,  vitB1:0.10, vitB2:0.15, vitB6:0.25, vitB12:0.3,  vitC:3,  folate:13,  calcium:6,   iron:0.6, zinc:1.6, magnesium:20,  potassium:270 },
+  '豚ロース':    { energy:248, protein:19.3, fat:19.2,carb:0.2, fiber:0,   vitA:4,   vitD:0.3, vitE:0.3, vitK:6,   vitB1:0.69, vitB2:0.19, vitB6:0.34, vitB12:0.5,  vitC:1,  folate:2,   calcium:3,   iron:0.5, zinc:2.0, magnesium:20,  potassium:310 },
+  '豚バラ':      { energy:386, protein:14.4, fat:35.4,carb:0.1, fiber:0,   vitA:5,   vitD:0.3, vitE:0.8, vitK:3,   vitB1:0.54, vitB2:0.14, vitB6:0.25, vitB12:0.6,  vitC:1,  folate:2,   calcium:3,   iron:0.6, zinc:1.8, magnesium:15,  potassium:240 },
+  '牛ひき肉':    { energy:224, protein:17.1, fat:21.1,carb:0.3, fiber:0,   vitA:2,   vitD:0.1, vitE:0.4, vitK:4,   vitB1:0.07, vitB2:0.17, vitB6:0.23, vitB12:1.7,  vitC:1,  folate:5,   calcium:6,   iron:2.1, zinc:4.0, magnesium:18,  potassium:290 },
+  '牛赤身':      { energy:133, protein:22.0, fat:4.6, carb:0.3, fiber:0,   vitA:3,   vitD:0.1, vitE:0.3, vitK:5,   vitB1:0.08, vitB2:0.19, vitB6:0.32, vitB12:1.5,  vitC:1,  folate:7,   calcium:4,   iron:2.5, zinc:4.2, magnesium:22,  potassium:350 },
+  'レバー(鶏)':  { energy:111, protein:18.9, fat:3.1, carb:0.6, fiber:0,   vitA:14000,vitD:0.2,vitE:1.0, vitK:0,   vitB1:0.38, vitB2:1.80, vitB6:0.65, vitB12:44.4, vitC:20, folate:1300,calcium:11,  iron:9.0, zinc:3.3, magnesium:19,  potassium:330 },
+
+  // 魚介類
+  '鮭':          { energy:133, protein:22.3, fat:4.1, carb:0.1, fiber:0,   vitA:11,  vitD:32.0,vitE:1.2, vitK:1,   vitB1:0.15, vitB2:0.21, vitB6:0.64, vitB12:9.4,  vitC:0,  folate:28,  calcium:14,  iron:0.5, zinc:0.5, magnesium:28,  potassium:350 },
+  'まぐろ(赤身)':{ energy:125, protein:26.4, fat:1.4, carb:0.1, fiber:0,   vitA:83,  vitD:5.0, vitE:0.8, vitK:2,   vitB1:0.10, vitB2:0.05, vitB6:0.85, vitB12:1.3,  vitC:2,  folate:8,   calcium:5,   iron:1.1, zinc:0.4, magnesium:45,  potassium:380 },
+  'さんま':      { energy:297, protein:18.1, fat:25.6,carb:0.1, fiber:0,   vitA:13,  vitD:14.9,vitE:1.6, vitK:0,   vitB1:0.01, vitB2:0.28, vitB6:0.54, vitB12:17.7, vitC:0,  folate:11,  calcium:28,  iron:1.4, zinc:1.0, magnesium:28,  potassium:200 },
+  'あさり':      { energy:30,  protein:6.0,  fat:0.3, carb:0.4, fiber:0,   vitA:4,   vitD:0.1, vitE:0.4, vitK:0,   vitB1:0.02, vitB2:0.16, vitB6:0.05, vitB12:52.4, vitC:1,  folate:11,  calcium:66,  iron:3.8, zinc:0.9, magnesium:100, potassium:140 },
+  'うなぎ':      { energy:255, protein:17.1, fat:19.3,carb:3.1, fiber:0,   vitA:2400,vitD:18.0,vitE:7.4, vitK:10,  vitB1:0.75, vitB2:0.74, vitB6:0.21, vitB12:3.5,  vitC:2,  folate:13,  calcium:150, iron:0.8, zinc:1.4, magnesium:20,  potassium:230 },
+  '牡蠣':        { energy:58,  protein:6.9,  fat:1.4, carb:4.9, fiber:0,   vitA:23,  vitD:0.1, vitE:1.4, vitK:0,   vitB1:0.07, vitB2:0.14, vitB6:0.09, vitB12:28.4, vitC:4,  folate:39,  calcium:88,  iron:1.9, zinc:13.2,magnesium:65,  potassium:190 },
+
+  // 卵・乳製品
+  '卵':          { energy:151, protein:12.3, fat:10.3,carb:0.4, fiber:0,   vitA:140, vitD:1.8, vitE:1.0, vitK:12,  vitB1:0.06, vitB2:0.37, vitB6:0.08, vitB12:0.9,  vitC:0,  folate:49,  calcium:51,  iron:1.8, zinc:1.1, magnesium:10,  potassium:130 },
+  '牛乳':        { energy:67,  protein:3.3,  fat:3.8, carb:4.8, fiber:0,   vitA:38,  vitD:0.3, vitE:0.1, vitK:0,   vitB1:0.04, vitB2:0.15, vitB6:0.03, vitB12:0.3,  vitC:1,  folate:5,   calcium:110, iron:0,   zinc:0.4, magnesium:10,  potassium:150 },
+  'ヨーグルト':  { energy:62,  protein:3.6,  fat:3.0, carb:4.9, fiber:0,   vitA:33,  vitD:0.1, vitE:0.1, vitK:0,   vitB1:0.04, vitB2:0.14, vitB6:0.04, vitB12:0.6,  vitC:1,  folate:11,  calcium:120, iron:0.1, zinc:0.4, magnesium:12,  potassium:170 },
+  'チーズ(カマンベール)':{ energy:291, protein:19.1, fat:24.7,carb:0.9, fiber:0,   vitA:240, vitD:0.2, vitE:0.5, vitK:20,  vitB1:0.04, vitB2:0.48, vitB6:0.14, vitB12:1.3,  vitC:0,  folate:47,  calcium:460, iron:0.2, zinc:2.8, magnesium:20,  potassium:120 },
+
+  // 大豆製品
+  '豆腐(木綿)':  { energy:72,  protein:6.6,  fat:4.2, carb:1.6, fiber:0.4, vitA:1,   vitD:0,   vitE:0.5, vitK:32,  vitB1:0.09, vitB2:0.04, vitB6:0.06, vitB12:0,    vitC:0,  folate:24,  calcium:93,  iron:1.5, zinc:0.6, magnesium:57,  potassium:110 },
+  '納豆':        { energy:200, protein:16.5, fat:10.0,carb:12.1,fiber:6.7, vitA:0,   vitD:0,   vitE:1.3, vitK:600, vitB1:0.07, vitB2:0.56, vitB6:0.24, vitB12:0,    vitC:0,  folate:120, calcium:90,  iron:3.3, zinc:1.9, magnesium:100, potassium:660 },
+  '枝豆':        { energy:135, protein:11.5, fat:6.1, carb:8.8, fiber:5.0, vitA:27,  vitD:0,   vitE:0.8, vitK:29,  vitB1:0.31, vitB2:0.15, vitB6:0.15, vitB12:0,    vitC:27, folate:320, calcium:76,  iron:2.7, zinc:1.4, magnesium:62,  potassium:590 },
+
+  // 野菜類
+  'ほうれん草':  { energy:20,  protein:2.2,  fat:0.4, carb:3.1, fiber:2.8, vitA:350, vitD:0,   vitE:2.1, vitK:270, vitB1:0.11, vitB2:0.20, vitB6:0.14, vitB12:0,    vitC:35, folate:210, calcium:49,  iron:2.0, zinc:0.7, magnesium:69,  potassium:690 },
+  'ブロッコリー':{ energy:33,  protein:4.3,  fat:0.5, carb:5.2, fiber:4.4, vitA:67,  vitD:0,   vitE:2.4, vitK:120, vitB1:0.14, vitB2:0.20, vitB6:0.27, vitB12:0,    vitC:120,folate:210, calcium:38,  iron:1.0, zinc:0.6, magnesium:29,  potassium:360 },
+  '小松菜':      { energy:14,  protein:1.5,  fat:0.2, carb:2.4, fiber:1.9, vitA:260, vitD:0,   vitE:0.9, vitK:210, vitB1:0.09, vitB2:0.13, vitB6:0.11, vitB12:0,    vitC:39, folate:110, calcium:170, iron:2.8, zinc:0.3, magnesium:12,  potassium:500 },
+  'にんじん':    { energy:39,  protein:0.7,  fat:0.2, carb:9.3, fiber:2.8, vitA:690, vitD:0,   vitE:0.4, vitK:10,  vitB1:0.04, vitB2:0.03, vitB6:0.10, vitB12:0,    vitC:6,  folate:21,  calcium:28,  iron:0.2, zinc:0.2, magnesium:10,  potassium:280 },
+  'かぼちゃ':    { energy:91,  protein:1.9,  fat:0.3, carb:20.6,fiber:3.5, vitA:330, vitD:0,   vitE:4.9, vitK:17,  vitB1:0.07, vitB2:0.09, vitB6:0.17, vitB12:0,    vitC:43, folate:42,  calcium:15,  iron:0.5, zinc:0.3, magnesium:25,  potassium:480 },
+  'トマト':      { energy:19,  protein:0.7,  fat:0.1, carb:4.7, fiber:1.0, vitA:45,  vitD:0,   vitE:0.9, vitK:4,   vitB1:0.05, vitB2:0.02, vitB6:0.08, vitB12:0,    vitC:15, folate:22,  calcium:7,   iron:0.2, zinc:0.1, magnesium:9,   potassium:210 },
+  'パプリカ(赤)':{ energy:30,  protein:1.0,  fat:0.2, carb:7.2, fiber:1.6, vitA:88,  vitD:0,   vitE:4.3, vitK:4,   vitB1:0.06, vitB2:0.14, vitB6:0.37, vitB12:0,    vitC:170,folate:68,  calcium:7,   iron:0.4, zinc:0.2, magnesium:11,  potassium:210 },
+  'ごぼう':      { energy:65,  protein:1.8,  fat:0.1, carb:15.4,fiber:5.7, vitA:0,   vitD:0,   vitE:0.2, vitK:0,   vitB1:0.05, vitB2:0.04, vitB6:0.10, vitB12:0,    vitC:2,  folate:68,  calcium:46,  iron:0.7, zinc:0.8, magnesium:54,  potassium:320 },
+  'きのこ(しいたけ)':{ energy:25, protein:3.0, fat:0.3, carb:6.4, fiber:4.2, vitA:0, vitD:0.4, vitE:0,  vitK:0,   vitB1:0.10, vitB2:0.19, vitB6:0.17, vitB12:0,    vitC:2,  folate:49,  calcium:4,   iron:0.4, zinc:0.8, magnesium:15,  potassium:290 },
+
+  // 果物類
+  'バナナ':      { energy:86,  protein:1.1,  fat:0.2, carb:22.5,fiber:1.1, vitA:6,   vitD:0,   vitE:0.5, vitK:0,   vitB1:0.05, vitB2:0.04, vitB6:0.38, vitB12:0,    vitC:16, folate:26,  calcium:6,   iron:0.3, zinc:0.2, magnesium:32,  potassium:360 },
+  'みかん':      { energy:46,  protein:0.7,  fat:0.1, carb:12.0,fiber:1.0, vitA:17,  vitD:0,   vitE:0.4, vitK:0,   vitB1:0.10, vitB2:0.03, vitB6:0.07, vitB12:0,    vitC:32, folate:22,  calcium:21,  iron:0.1, zinc:0.1, magnesium:11,  potassium:150 },
+  'キウイ':      { energy:53,  protein:1.0,  fat:0.2, carb:13.5,fiber:2.5, vitA:7,   vitD:0,   vitE:1.3, vitK:34,  vitB1:0.01, vitB2:0.02, vitB6:0.13, vitB12:0,    vitC:69, folate:37,  calcium:26,  iron:0.3, zinc:0.1, magnesium:14,  potassium:290 },
+  'いちご':      { energy:34,  protein:0.9,  fat:0.1, carb:8.5, fiber:1.4, vitA:0,   vitD:0,   vitE:0.4, vitK:4,   vitB1:0.03, vitB2:0.02, vitB6:0.05, vitB12:0,    vitC:62, folate:90,  calcium:17,  iron:0.3, zinc:0.2, magnesium:13,  potassium:170 },
+  'アボカド':    { energy:187, protein:2.1,  fat:18.7,carb:6.2, fiber:5.6, vitA:7,   vitD:0,   vitE:3.3, vitK:20,  vitB1:0.10, vitB2:0.21, vitB6:0.32, vitB12:0,    vitC:12, folate:84,  calcium:9,   iron:0.6, zinc:0.7, magnesium:33,  potassium:720 },
+
+  // ナッツ・種子
+  'アーモンド':  { energy:608, protein:19.6, fat:51.8,carb:19.7,fiber:10.1,vitA:0,   vitD:0,   vitE:30.3,vitK:0,   vitB1:0.20, vitB2:1.04, vitB6:0.09, vitB12:0,    vitC:0,  folate:64,  calcium:260, iron:3.7, zinc:3.6, magnesium:270, potassium:740 },
+  'くるみ':      { energy:713, protein:14.6, fat:68.8,carb:11.7,fiber:7.5, vitA:0,   vitD:0,   vitE:1.2, vitK:2,   vitB1:0.26, vitB2:0.15, vitB6:0.49, vitB12:0,    vitC:0,  folate:91,  calcium:85,  iron:2.6, zinc:2.6, magnesium:150, potassium:540 },
+
+  // その他
+  'ひじき(乾)':  { energy:180, protein:9.2,  fat:1.5, carb:58.4,fiber:51.8,vitA:88,  vitD:0,   vitE:0.1, vitK:0,   vitB1:0,    vitB2:0,    vitB6:0,    vitB12:0,    vitC:0,  folate:93,  calcium:1000,iron:58.2,zinc:1.0, magnesium:640, potassium:4400 },
+  'わかめ(生)':  { energy:24,  protein:1.9,  fat:0.2, carb:5.8, fiber:3.6, vitA:98,  vitD:0,   vitE:1.0, vitK:190, vitB1:0.08, vitB2:0.14, vitB6:0.02, vitB12:0,    vitC:15, folate:49,  calcium:100, iron:0.7, zinc:0.3, magnesium:110, potassium:730 },
+  'みそ汁(1杯)': { energy:30,  protein:2.0,  fat:1.0, carb:3.5, fiber:0.5, vitA:0,   vitD:0,   vitE:0.1, vitK:0,   vitB1:0.03, vitB2:0.02, vitB6:0.04, vitB12:0,    vitC:0,  folate:10,  calcium:30,  iron:0.7, zinc:0.5, magnesium:20,  potassium:210 },
+  'ドレッシング(大さじ1)':{ energy:40, protein:0.2, fat:4.0, carb:1.5, fiber:0, vitA:0,vitD:0,vitE:0.5,vitK:0,vitB1:0,vitB2:0,vitB6:0,vitB12:0,vitC:0,folate:0,calcium:2,iron:0,zinc:0,magnesium:1,potassium:5 },
+};
+
+// =====================================================
+// アプリ状態
+// =====================================================
+let currentMeal = 'breakfast';
+let meals = {
+  breakfast: [{ food: '', amount: 100 }],
+  lunch:     [{ food: '', amount: 100 }],
+  dinner:    [{ food: '', amount: 100 }],
+  snack:     [{ food: '', amount: 100 }],
+};
+let radarChartInstance = null;
+
+const MEAL_LABELS = { breakfast:'☀️ 朝食', lunch:'🌤 昼食', dinner:'🌙 夕食', snack:'🍵 間食' };
+
+function switchMeal(meal) {
+  saveMealInputs();
+  currentMeal = meal;
+  const tabs = document.querySelectorAll('.meal-tab');
+  const mealKeys = Object.keys(MEAL_LABELS);
+  tabs.forEach((t, i) => { t.classList.toggle('active', mealKeys[i] === meal); });
+  renderMealInputs();
+}
+
+function saveMealInputs() {
+  const rows = document.querySelectorAll('#mealInputArea .food-row');
+  meals[currentMeal] = Array.from(rows).map(row => ({
+    food: row.querySelector('.food-name').value,
+    amount: parseFloat(row.querySelector('.food-amount').value) || 0,
+  }));
+}
+
+function renderMealInputs() {
+  const area = document.getElementById('mealInputArea');
+  area.innerHTML = '';
+  const items = meals[currentMeal];
+  items.forEach((item, i) => {
+    area.appendChild(createFoodRow(item.food, item.amount));
+  });
+}
+
+function createFoodRow(food = '', amount = 100) {
+  const div = document.createElement('div');
+  div.className = 'food-row';
+
+  const datalistId = 'foodList_' + Math.random().toString(36).slice(2);
+  const foodNames = Object.keys(FOOD_DB);
+
+  div.innerHTML = `
+    <input type="text" class="food-name" list="${datalistId}" placeholder="食材名（例：ご飯）" value="${food}">
+    <datalist id="${datalistId}">
+      ${foodNames.map(n => `<option value="${n}">`).join('')}
+    </datalist>
+    <input type="number" class="food-amount" min="1" max="2000" value="${amount}">
+    <span class="unit">g</span>
+    <button class="remove-btn" onclick="this.parentElement.remove()">✕</button>
+  `;
+  return div;
+}
+
+function addFoodRow() {
+  document.getElementById('mealInputArea').appendChild(createFoodRow());
+}
+
+// =====================================================
+// 栄養素計算
+// =====================================================
+function calcNutrients() {
+  saveMealInputs();
+  const totals = {};
+  Object.keys(NUTRIENT_META).forEach(k => totals[k] = 0);
+
+  Object.values(meals).forEach(mealItems => {
+    mealItems.forEach(({ food, amount }) => {
+      if (!food || !amount) return;
+      const db = FOOD_DB[food];
+      if (!db) return;
+      const ratio = amount / 100;
+      Object.keys(NUTRIENT_META).forEach(k => {
+        if (db[k] !== undefined) totals[k] += db[k] * ratio;
+      });
+    });
+  });
+  return totals;
+}
+
+function getTargets() {
+  const sex = document.getElementById('sex').value;
+  const age = document.getElementById('ageGroup').value;
+  const act = document.getElementById('activity').value;
+  const base = DRI[sex][age];
+  const factor = ACTIVITY_FACTOR[act];
+  const result = {};
+  Object.keys(base).forEach(k => {
+    result[k] = k === 'energy' ? Math.round(base[k] * factor) : base[k];
+  });
+  return result;
+}
+
+// =====================================================
+// 分析・表示
+// =====================================================
+function analyzeNutrition() {
+  const totals = calcNutrients();
+  const targets = getTargets();
+
+  // 充足率計算（% of 推奨量）
+  const rates = {};
+  Object.keys(NUTRIENT_META).forEach(k => {
+    const t = targets[k];
+    if (!t) return;
+    rates[k] = Math.round((totals[k] / t) * 100);
+  });
+
+  // 保存機能用にグローバルへ記録
+  lastRates   = rates;
+  lastTotals  = totals;
+  lastTargets = targets;
+
+  // サマリーバッジ
+  let low = 0, ok = 0, over = 0;
+  Object.values(rates).forEach(r => {
+    if (r < 70) low++;
+    else if (r > 130) over++;
+    else ok++;
+  });
+  document.getElementById('summaryBadges').innerHTML = `
+    <div class="badge badge-red"><div class="num">${low}</div><p>不足（70%未満）</p></div>
+    <div class="badge badge-green"><div class="num">${ok}</div><p>良好（70〜130%）</p></div>
+    <div class="badge badge-orange"><div class="num">${over}</div><p>過剰（130%超）</p></div>
+  `;
+
+  renderBars(rates, totals, targets);
+  renderRadar(rates);
+  renderRecommendations(rates);
+
+  document.getElementById('results').style.display = 'block';
+  document.getElementById('results').scrollIntoView({ behavior: 'smooth' });
+}
+
+function pctClass(r) {
+  if (r < 70) return 'pct-low';
+  if (r > 130) return 'pct-over';
+  return 'pct-ok';
+}
+function barClass(r) {
+  if (r < 70) return 'bar-low';
+  if (r > 130) return 'bar-over';
+  return 'bar-ok';
+}
+
+function renderBars(rates, totals, targets) {
+  const container = document.getElementById('nutrientBars');
+  container.innerHTML = '';
+  Object.entries(NUTRIENT_META).forEach(([k, meta]) => {
+    const r = rates[k] ?? 0;
+    const t = targets[k];
+    const v = totals[k];
+    const barWidth = Math.min(r, 150);
+    container.innerHTML += `
+      <div class="nutrient-bar-item">
+        <div class="nutrient-bar-header">
+          <span class="nutrient-name">${meta.icon} ${meta.label}</span>
+          <span class="nutrient-pct ${pctClass(r)}">${r}% (${v.toFixed(1)}/${t}${meta.unit})</span>
+        </div>
+        <div class="bar-bg">
+          <div class="bar-fill ${barClass(r)}" style="width:${barWidth}%"></div>
+        </div>
+      </div>
+    `;
+  });
+}
+
+function renderRadar(rates) {
+  const keys = ['energy','protein','fat','carb','fiber','vitA','vitD','vitC','calcium','iron','zinc','magnesium','potassium','vitB1','vitB2','vitB12'];
+  const labels = keys.map(k => NUTRIENT_META[k]?.label ?? k);
+  const data = keys.map(k => Math.min(rates[k] ?? 0, 150));
+
+  if (radarChartInstance) radarChartInstance.destroy();
+  const ctx = document.getElementById('radarChart').getContext('2d');
+  radarChartInstance = new Chart(ctx, {
+    type: 'radar',
+    data: {
+      labels,
+      datasets: [{
+        label: '充足率（%）',
+        data,
+        fill: true,
+        backgroundColor: 'rgba(46,204,113,0.2)',
+        borderColor: '#27ae60',
+        borderWidth: 2,
+        pointBackgroundColor: data.map(v => v < 70 ? '#e74c3c' : v > 130 ? '#f39c12' : '#27ae60'),
+        pointRadius: 4,
+      }, {
+        label: '推奨量（100%）',
+        data: Array(keys.length).fill(100),
+        fill: false,
+        borderColor: '#bbb',
+        borderDash: [4, 4],
+        borderWidth: 1.5,
+        pointRadius: 0,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        r: {
+          min: 0, max: 150,
+          ticks: { stepSize: 50, font: { size: 9 } },
+          pointLabels: { font: { size: 9 } },
+          grid: { color: '#eee' },
+        }
+      },
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 10 } } },
+        tooltip: { callbacks: { label: ctx => `${ctx.dataset.label}: ${ctx.raw}%` } }
+      }
+    }
+  });
+}
+
+function renderRecommendations(rates) {
+  const deficient = Object.entries(rates)
+    .filter(([k, r]) => r < 70 && FOOD_RECOMMENDATIONS[k])
+    .sort(([,a],[,b]) => a - b);
+
+  const el = document.getElementById('deficientList');
+  if (deficient.length === 0) {
+    el.innerHTML = '<p style="color:#27ae60;font-weight:700;">🎉 すべての栄養素が70%以上摂れています！</p>';
+    return;
+  }
+  el.innerHTML = deficient.map(([k, r]) => {
+    const meta = NUTRIENT_META[k];
+    const foods = FOOD_RECOMMENDATIONS[k];
+    return `
+      <div class="deficient-item">
+        <h4>${meta.icon} ${meta.label}（充足率 ${r}%）</h4>
+        <div class="tags">
+          ${foods.map(f => `<span class="food-tag">${f}</span>`).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// =====================================================
+// チャットボット
+// =====================================================
+
+// 食材の一般的な1単位の重さ
+const FOOD_PORTIONS = {
+  '納豆': [{ unit: '1パック', g: 45 }, { unit: '1袋（3パック入り）', g: 135 }],
+  '卵': [{ unit: '1個（Mサイズ）', g: 50 }, { unit: '1個（Lサイズ）', g: 60 }],
+  'ご飯': [{ unit: '1膳（普通盛り）', g: 150 }, { unit: '1膳（大盛り）', g: 200 }, { unit: '茶碗1杯（小）', g: 120 }],
+  '食パン': [{ unit: '1枚（6枚切り）', g: 60 }, { unit: '1枚（8枚切り）', g: 45 }],
+  'バナナ': [{ unit: '1本（皮なし）', g: 90 }, { unit: '1本（皮つき）', g: 130 }],
+  'みかん': [{ unit: '1個', g: 80 }, { unit: '1個（大）', g: 120 }],
+  'りんご': [{ unit: '1個', g: 250 }, { unit: '1/4個', g: 60 }],
+  'キウイ': [{ unit: '1個', g: 80 }],
+  'いちご': [{ unit: '1粒', g: 15 }, { unit: '1パック', g: 250 }],
+  'アボカド': [{ unit: '1個（正味）', g: 140 }],
+  '鶏むね肉': [{ unit: '1枚', g: 250 }, { unit: '1人前', g: 100 }],
+  '鶏もも肉': [{ unit: '1枚', g: 250 }, { unit: '1人前', g: 100 }],
+  '豚ロース': [{ unit: '1枚（生姜焼き用）', g: 80 }, { unit: '1人前', g: 100 }],
+  '鮭': [{ unit: '1切れ', g: 100 }, { unit: '1人前', g: 80 }],
+  'まぐろ(赤身)': [{ unit: 'お刺身5切れ', g: 80 }, { unit: '1人前', g: 100 }],
+  '牛乳': [{ unit: '1杯（コップ）', g: 200 }, { unit: '1本（200ml）', g: 200 }, { unit: '1リットル', g: 1000 }],
+  'ヨーグルト': [{ unit: '1個（小カップ）', g: 80 }, { unit: '1個（大カップ）', g: 400 }],
+  '豆腐(木綿)': [{ unit: '1丁', g: 300 }, { unit: '1/3丁', g: 100 }],
+  'ほうれん草': [{ unit: '1束', g: 200 }, { unit: '1人前', g: 80 }],
+  'ブロッコリー': [{ unit: '1株', g: 200 }, { unit: '小房1個', g: 20 }],
+  'にんじん': [{ unit: '1本（中）', g: 150 }, { unit: '1/2本', g: 75 }],
+  'トマト': [{ unit: '1個（中）', g: 150 }, { unit: 'ミニトマト1個', g: 15 }],
+  'アーモンド': [{ unit: '10粒', g: 15 }, { unit: '1袋（小）', g: 30 }],
+  'オートミール': [{ unit: '1食分', g: 40 }, { unit: '大さじ3', g: 30 }],
+  'みそ汁(1杯)': [{ unit: '1杯', g: 200 }],
+  'あさり': [{ unit: '1パック（殻つき）', g: 150 }, { unit: '正味', g: 50 }],
+  '牡蠣': [{ unit: '1個', g: 20 }, { unit: '1人前（5〜6個）', g: 100 }],
+  'うなぎ': [{ unit: '1人前（蒲焼き）', g: 100 }],
+  'レバー(鶏)': [{ unit: '1人前', g: 80 }],
+  'パスタ(茹で)': [{ unit: '1人前（乾燥80g分）', g: 200 }],
+  'そば(茹で)': [{ unit: '1人前', g: 180 }],
+  'うどん(茹で)': [{ unit: '1玉', g: 240 }],
+  'ひじき(乾)': [{ unit: '1食分', g: 8 }],
+  'わかめ(生)': [{ unit: '1食分', g: 30 }],
+};
+
+// 栄養素ランキング（食品DB から動的に計算）
+function getRanking(nutrientKey, topN = 6) {
+  return Object.entries(FOOD_DB)
+    .filter(([, d]) => d[nutrientKey] > 0)
+    .sort(([, a], [, b]) => b[nutrientKey] - a[nutrientKey])
+    .slice(0, topN)
+    .map(([name, d]) => `${name}（100gあたり ${d[nutrientKey]}${NUTRIENT_META[nutrientKey]?.unit}）`);
+}
+
+// キーワードマッチ用のQ&Aルール
+const QA_RULES = [
+  // ── 重さ系 ──
+  {
+    patterns: [/(.+)[（(]?(\d)[）)]?パック/, /納豆.*何g/, /何g.*納豆/],
+    match: q => q.includes('納豆'),
+    answer: () => {
+      const p = FOOD_PORTIONS['納豆'];
+      return `📦 納豆の目安重量\n・${p[0].unit}：約${p[0].g}g\n・${p[1].unit}：約${p[1].g}g\n\n💡 食材入力では「45」gで「1パック分」になります！`;
+    }
+  },
+  {
+    match: q => q.includes('卵') && (q.includes('何g') || q.includes('重さ') || q.includes('何グラム') || q.includes('1個')),
+    answer: () => {
+      const p = FOOD_PORTIONS['卵'];
+      return `🥚 卵の目安重量\n・${p[0].unit}：約${p[0].g}g\n・${p[1].unit}：約${p[1].g}g\n\n💡 殻を除いた正味重量です。`;
+    }
+  },
+  {
+    match: q => (q.includes('ご飯') || q.includes('白米') || q.includes('ごはん')) && (q.includes('何g') || q.includes('1膳') || q.includes('重さ') || q.includes('何グラム')),
+    answer: () => {
+      const p = FOOD_PORTIONS['ご飯'];
+      return `🍚 ご飯の目安重量\n・${p[0].unit}：約${p[0].g}g\n・${p[1].unit}：約${p[1].g}g\n・${p[2].unit}：約${p[2].g}g\n\n💡 ダイエット中は120g（茶碗小盛り）を目安にする方も多いです。`;
+    }
+  },
+  {
+    match: q => q.includes('バナナ') && (q.includes('何g') || q.includes('1本') || q.includes('重さ') || q.includes('何グラム')),
+    answer: () => {
+      const p = FOOD_PORTIONS['バナナ'];
+      return `🍌 バナナの目安重量\n・${p[0].unit}：約${p[0].g}g（食べられる部分）\n・${p[1].unit}：約${p[1].g}g\n\n💡 カリウムが豊富で疲労回復に効果的です！`;
+    }
+  },
+  {
+    match: q => q.includes('食パン') && (q.includes('何g') || q.includes('1枚') || q.includes('重さ') || q.includes('何グラム')),
+    answer: () => {
+      const p = FOOD_PORTIONS['食パン'];
+      return `🍞 食パンの目安重量\n・${p[0].unit}：約${p[0].g}g\n・${p[1].unit}：約${p[1].g}g`;
+    }
+  },
+  {
+    match: q => q.includes('牛乳') && (q.includes('何g') || q.includes('1杯') || q.includes('重さ') || q.includes('何グラム') || q.includes('何ml')),
+    answer: () => `🥛 牛乳の目安\n・コップ1杯（200ml）：200g\n・牛乳は密度≒水なので ml ≈ g で計算できます。`,
+  },
+  {
+    match: q => q.includes('豆腐') && (q.includes('何g') || q.includes('1丁') || q.includes('重さ') || q.includes('何グラム')),
+    answer: () => `🍱 豆腐（木綿・絹）の目安重量\n・1丁：約300g\n・1/3丁（1人前目安）：約100g\n・カット豆腐1パック：150〜200g`,
+  },
+
+  // ── 汎用「○○は何g？」パターン ──
+  {
+    match: q => {
+      for (const name of Object.keys(FOOD_PORTIONS)) {
+        if (q.includes(name) && (q.includes('何g') || q.includes('重さ') || q.includes('何グラム') || q.includes('g?') || q.includes('g？'))) return true;
+      }
+      return false;
+    },
+    answer: q => {
+      for (const [name, portions] of Object.entries(FOOD_PORTIONS)) {
+        if (q.includes(name)) {
+          const lines = portions.map(p => `・${p.unit}：約${p.g}g`).join('\n');
+          return `📦 ${name}の目安重量\n${lines}`;
+        }
+      }
+    }
+  },
+
+  // ── 栄養素ランキング系 ──
+  {
+    match: q => q.includes('鉄') && (q.includes('多い') || q.includes('含む') || q.includes('おすすめ') || q.includes('食材') || q.includes('食べ物') || q.includes('補う')),
+    answer: () => {
+      const list = getRanking('iron').map((s,i) => `${i+1}. ${s}`).join('\n');
+      return `🫀 鉄分が多い食材 TOP6\n${list}\n\n💡 ビタミンCと一緒に摂ると吸収率がUPします！`;
+    }
+  },
+  {
+    match: q => (q.includes('ビタミンC') || q.includes('ビタミンc') || q.includes('vitamin c')) && (q.includes('多い') || q.includes('含む') || q.includes('おすすめ') || q.includes('食材') || q.includes('食べ物') || q.includes('補う')),
+    answer: () => {
+      const list = getRanking('vitC').map((s,i) => `${i+1}. ${s}`).join('\n');
+      return `🍊 ビタミンCが多い食材 TOP6\n${list}\n\n💡 熱に弱いので生食や短時間加熱がおすすめです！`;
+    }
+  },
+  {
+    match: q => (q.includes('カルシウム') || q.includes('calcium')) && (q.includes('多い') || q.includes('含む') || q.includes('おすすめ') || q.includes('食材') || q.includes('食べ物') || q.includes('補う')),
+    answer: () => {
+      const list = getRanking('calcium').map((s,i) => `${i+1}. ${s}`).join('\n');
+      return `🥛 カルシウムが多い食材 TOP6\n${list}\n\n💡 ビタミンDと一緒に摂ると吸収率がUPします！`;
+    }
+  },
+  {
+    match: q => (q.includes('食物繊維') || q.includes('繊維')) && (q.includes('多い') || q.includes('含む') || q.includes('おすすめ') || q.includes('食材') || q.includes('食べ物') || q.includes('補う')),
+    answer: () => {
+      const list = getRanking('fiber').map((s,i) => `${i+1}. ${s}`).join('\n');
+      return `🥦 食物繊維が多い食材 TOP6\n${list}\n\n💡 腸内環境を整え、血糖値の急上昇を抑える効果もあります！`;
+    }
+  },
+  {
+    match: q => (q.includes('タンパク質') || q.includes('たんぱく質') || q.includes('プロテイン')) && (q.includes('多い') || q.includes('含む') || q.includes('おすすめ') || q.includes('食材') || q.includes('食べ物') || q.includes('補う')),
+    answer: () => {
+      const list = getRanking('protein').map((s,i) => `${i+1}. ${s}`).join('\n');
+      return `🥩 タンパク質が多い食材 TOP6\n${list}\n\n💡 筋肉・免疫・肌など体のあらゆる組織の材料になります！`;
+    }
+  },
+  {
+    match: q => (q.includes('ビタミンD') || q.includes('ビタミンd')) && (q.includes('多い') || q.includes('含む') || q.includes('おすすめ') || q.includes('食材') || q.includes('食べ物') || q.includes('補う')),
+    answer: () => {
+      const list = getRanking('vitD').map((s,i) => `${i+1}. ${s}`).join('\n');
+      return `☀️ ビタミンDが多い食材 TOP6\n${list}\n\n💡 日光に当たることでも体内で合成されます！`;
+    }
+  },
+  {
+    match: q => (q.includes('亜鉛') || q.includes('zinc')) && (q.includes('多い') || q.includes('含む') || q.includes('おすすめ') || q.includes('食材') || q.includes('食べ物') || q.includes('補う')),
+    answer: () => {
+      const list = getRanking('zinc').map((s,i) => `${i+1}. ${s}`).join('\n');
+      return `🦐 亜鉛が多い食材 TOP6\n${list}\n\n💡 味覚・免疫・肌の健康に関係しています！`;
+    }
+  },
+  {
+    match: q => (q.includes('マグネシウム') || q.includes('magnesium')) && (q.includes('多い') || q.includes('含む') || q.includes('おすすめ') || q.includes('食材') || q.includes('食べ物') || q.includes('補う')),
+    answer: () => {
+      const list = getRanking('magnesium').map((s,i) => `${i+1}. ${s}`).join('\n');
+      return `🌰 マグネシウムが多い食材 TOP6\n${list}\n\n💡 筋肉の収縮・神経機能・骨の健康に重要です！`;
+    }
+  },
+  {
+    match: q => (q.includes('葉酸') || q.includes('folate')) && (q.includes('多い') || q.includes('含む') || q.includes('おすすめ') || q.includes('食材') || q.includes('食べ物') || q.includes('補う')),
+    answer: () => {
+      const list = getRanking('folate').map((s,i) => `${i+1}. ${s}`).join('\n');
+      return `🥑 葉酸が多い食材 TOP6\n${list}\n\n💡 妊娠初期に特に重要な栄養素です！`;
+    }
+  },
+  {
+    match: q => (q.includes('カリウム') || q.includes('potassium')) && (q.includes('多い') || q.includes('含む') || q.includes('おすすめ') || q.includes('食材') || q.includes('食べ物') || q.includes('補う')),
+    answer: () => {
+      const list = getRanking('potassium').map((s,i) => `${i+1}. ${s}`).join('\n');
+      return `🍌 カリウムが多い食材 TOP6\n${list}\n\n💡 塩分（ナトリウム）の排出を助け、血圧を下げる効果があります！`;
+    }
+  },
+  {
+    match: q => (q.includes('ビタミンA') || q.includes('ビタミンa')) && (q.includes('多い') || q.includes('含む') || q.includes('おすすめ') || q.includes('食材') || q.includes('食べ物') || q.includes('補う')),
+    answer: () => {
+      const list = getRanking('vitA').map((s,i) => `${i+1}. ${s}`).join('\n');
+      return `🥕 ビタミンAが多い食材 TOP6\n${list}\n\n💡 目・皮膚・免疫に重要。脂溶性なので油と一緒に摂ると吸収率UP！`;
+    }
+  },
+
+  // ── カロリー・栄養成分照会 ──
+  {
+    match: q => {
+      for (const name of Object.keys(FOOD_DB)) {
+        if (q.includes(name) && (q.includes('カロリー') || q.includes('kcal') || q.includes('何カロリー') || q.includes('エネルギー'))) return true;
+      }
+      return false;
+    },
+    answer: q => {
+      for (const [name, d] of Object.entries(FOOD_DB)) {
+        if (q.includes(name)) {
+          return `⚡ ${name}のカロリー（100gあたり）\n・エネルギー：${d.energy} kcal\n・タンパク質：${d.protein}g\n・脂質：${d.fat}g\n・炭水化物：${d.carb}g\n\n💡 食材入力時の参考にしてください！`;
+        }
+      }
+    }
+  },
+
+  // ── 一般的な健康Q&A ──
+  {
+    match: q => q.includes('疲れ') || q.includes('疲労') || q.includes('だるい'),
+    answer: () => `💪 疲れに効く栄養素と食材\n\n🌾 ビタミンB1（糖質をエネルギーに変換）\n→ 豚肉・玄米・枝豆\n\n🫀 鉄分（貧血による疲労を改善）\n→ レバー・あさり・小松菜\n\n🌰 マグネシウム（筋肉疲労を回復）\n→ アーモンド・豆腐・わかめ\n\n💡 水分補給も忘れずに！`,
+  },
+  {
+    match: q => q.includes('肌') || q.includes('美肌') || q.includes('スキン'),
+    answer: () => `✨ 美肌に効く栄養素と食材\n\n🍊 ビタミンC（コラーゲン生成）\n→ 赤パプリカ・キウイ・いちご\n\n🌿 ビタミンE（抗酸化）\n→ アーモンド・アボカド・かぼちゃ\n\n🥩 タンパク質（肌の材料）\n→ 鶏むね肉・豆腐・卵\n\n🥕 ビタミンA（肌の代謝）\n→ にんじん・うなぎ・レバー`,
+  },
+  {
+    match: q => q.includes('骨') || q.includes('骨粗') || q.includes('強くし'),
+    answer: () => `🦴 骨を強くする栄養素と食材\n\n🥛 カルシウム（骨の主成分）\n→ 牛乳・チーズ・小松菜・ひじき\n\n☀️ ビタミンD（カルシウムの吸収を助ける）\n→ 鮭・うなぎ・きのこ類\n\n🥬 ビタミンK（骨にカルシウムを定着させる）\n→ 納豆・ほうれん草・ブロッコリー`,
+  },
+  {
+    match: q => q.includes('免疫') || q.includes('風邪') || q.includes('かぜ'),
+    answer: () => `🛡 免疫力を高める栄養素と食材\n\n🍊 ビタミンC（免疫細胞を活性化）\n→ 赤パプリカ・キウイ・ブロッコリー\n\n🦐 亜鉛（免疫機能のサポート）\n→ 牡蠣・牛赤身・アーモンド\n\n🥕 ビタミンA（粘膜を守る）\n→ にんじん・かぼちゃ・レバー`,
+  },
+  {
+    match: q => q.includes('ダイエット') || q.includes('痩せ') || q.includes('減量') || q.includes('体重'),
+    answer: () => `🏃 ダイエットに役立つ知識\n\n✅ 低カロリーで栄養豊富な食材\n→ 鶏むね肉・豆腐・ほうれん草・ブロッコリー\n\n✅ 食物繊維で満腹感UP\n→ ごぼう・オートミール・きのこ類\n\n✅ タンパク質で筋肉を維持\n→ 卵・魚・大豆製品\n\n⚠️ 極端な食事制限は栄養不足につながります。このアプリで栄養バランスを確認しながら進めましょう！`,
+  },
+  {
+    match: q => q.includes('貧血') || q.includes('ヘモグロビン') || q.includes('血が薄'),
+    answer: () => `🫀 貧血改善に効果的な食材\n\n鉄分が多い食材\n→ レバー・あさり・ひじき・小松菜\n\n💡 ヘム鉄（動物性）は吸収率が高い\n→ 赤身肉・魚介類\n\n💡 非ヘム鉄（植物性）はビタミンCと一緒に\n→ ほうれん草＋レモン など\n\n💡 コーヒー・紅茶は鉄の吸収を妨げるので食事中は避けて！`,
+  },
+
+  // ── このアプリについて ──
+  {
+    match: q => q.includes('使い方') || q.includes('どうやって') || (q.includes('入力') && q.includes('方法')),
+    answer: () => `📱 アプリの使い方\n\n1️⃣ 上部のプロフィールで「性別・年齢・活動量」を設定\n\n2️⃣ 「朝食/昼食/夕食/間食」タブを切り替えて食材を入力\n　→ 食材名のところに入力すると候補が出ます\n　→ 量はグラム（g）で入力\n\n3️⃣「栄養素を分析する」ボタンを押す\n\n4️⃣ レーダーチャートと棒グラフで不足栄養素を確認\n\n5️⃣ 「おすすめ食材」セクションで不足を補う食材をチェック！`,
+  },
+];
+
+function botReply(question) {
+  const q = question.trim().toLowerCase()
+    .replace(/[！？。、]/g, '')
+    .replace(/[ａ-ｚＡ-Ｚ]/g, s => String.fromCharCode(s.charCodeAt(0) - 0xFEE0));
+
+  for (const rule of QA_RULES) {
+    if (rule.match(q)) {
+      const ans = rule.answer(q);
+      if (ans) return ans;
+    }
+  }
+
+  // フォールバック：食材名だけ含まれる場合
+  for (const [name, d] of Object.entries(FOOD_DB)) {
+    if (q.includes(name)) {
+      return `📋 ${name}の栄養成分（100gあたり）\n・エネルギー：${d.energy} kcal\n・タンパク質：${d.protein}g\n・脂質：${d.fat}g\n・炭水化物：${d.carb}g\n・食物繊維：${d.fiber}g\n・カルシウム：${d.calcium}mg\n・鉄：${d.iron}mg\n・ビタミンC：${d.vitC}mg`;
+    }
+  }
+
+  // 最終フォールバック
+  return `🤔 すみません、その質問にはまだ対応していません。\n\n以下のような質問が得意です：\n・「○○は何g？」（食材の目安重量）\n・「○○のカロリーは？」\n・「○○が多い食材は？」（鉄分・カルシウムなど）\n・「疲れに効く食材は？」\n・「美肌にいい食材は？」`;
+}
+
+function toggleChat() {
+  const body = document.getElementById('chatBody');
+  const icon = document.getElementById('chatToggleIcon');
+  body.classList.toggle('open');
+  icon.classList.toggle('open');
+}
+
+function appendMessage(text, role) {
+  const messages = document.getElementById('chatMessages');
+  const div = document.createElement('div');
+  div.className = `chat-msg ${role}`;
+  if (role === 'bot') {
+    div.innerHTML = `<div class="msg-label">🤖 栄養アシスタント</div>${escapeHtml(text)}`;
+  } else {
+    div.innerHTML = `<div class="msg-label">👤 あなた</div>${escapeHtml(text)}`;
+  }
+  messages.appendChild(div);
+  messages.scrollTop = messages.scrollHeight;
+}
+
+function escapeHtml(text) {
+  return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+}
+
+function sendChat() {
+  const input = document.getElementById('chatInput');
+  const q = input.value.trim();
+  if (!q) return;
+  appendMessage(q, 'user');
+  input.value = '';
+  setTimeout(() => {
+    const reply = botReply(q);
+    appendMessage(reply, 'bot');
+  }, 300);
+}
+
+function sendSuggestion(el) {
+  document.getElementById('chatInput').value = el.textContent;
+  sendChat();
+}
+
+// =====================================================
+// 保存・コピー機能
+// =====================================================
+
+// 最後の分析結果を保持するグローバル変数
+let lastRates = null;
+let lastTotals = null;
+let lastTargets = null;
+
+// analyzeNutrition() の結果をキャプチャするためにラップ
+const _origAnalyze = analyzeNutrition;
+analyzeNutrition = function() {
+  _origAnalyze();
+  // 分析後に保存バーをアニメーション表示
+  const bar = document.querySelector('.save-bar');
+  if (bar) {
+    bar.style.opacity = '0';
+    bar.style.transform = 'translateY(-8px)';
+    setTimeout(() => {
+      bar.style.transition = 'opacity 0.4s, transform 0.4s';
+      bar.style.opacity = '1';
+      bar.style.transform = 'translateY(0)';
+    }, 100);
+  }
+};
+
+// 保存テキスト生成
+function buildSaveText() {
+  const sex = document.getElementById('sex').value === 'male' ? '男性' : '女性';
+  const age = document.getElementById('ageGroup').value;
+  const actMap = { low: '低い', mid: 'ふつう', high: '高い' };
+  const act = actMap[document.getElementById('activity').value];
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日`;
+
+  const includeMenu      = document.getElementById('chk-menu').checked;
+  const includeResult    = document.getElementById('chk-result').checked;
+  const includeRecommend = document.getElementById('chk-recommend').checked;
+
+  const lines = [];
+  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  lines.push(`🥗 1日の栄養素チェッカー　${dateStr}`);
+  lines.push(`プロフィール: ${sex}・${age}歳・活動量${act}`);
+  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+
+  // 献立
+  if (includeMenu) {
+    lines.push('');
+    lines.push('【今日の献立】');
+    const mealLabelMap = { breakfast: '☀ 朝食', lunch: '🌤 昼食', dinner: '🌙 夕食', snack: '🍵 間食' };
+    let hasAnyFood = false;
+    Object.entries(meals).forEach(([key, items]) => {
+      const valid = items.filter(i => i.food && i.amount);
+      if (valid.length === 0) return;
+      hasAnyFood = true;
+      lines.push(`\n${mealLabelMap[key]}`);
+      valid.forEach(i => lines.push(`  ・${i.food} ${i.amount}g`));
+    });
+    if (!hasAnyFood) lines.push('  （入力なし）');
+  }
+
+  // 栄養分析
+  if (includeResult && lastRates && lastTotals && lastTargets) {
+    lines.push('');
+    lines.push('【栄養素分析結果】');
+    lines.push('  栄養素              摂取量       目標量    充足率');
+    lines.push('  ' + '─'.repeat(46));
+    Object.entries(NUTRIENT_META).forEach(([k, meta]) => {
+      const r = lastRates[k] ?? 0;
+      const v = lastTotals[k] ?? 0;
+      const t = lastTargets[k] ?? 0;
+      const flag = r < 70 ? '⚠ 不足' : r > 130 ? '▲ 過剰' : '✓ 良好';
+      const name = (meta.label + '　').slice(0, 10);
+      const val  = `${v.toFixed(1)}${meta.unit}`.padStart(10);
+      const tgt  = `${t}${meta.unit}`.padStart(8);
+      const pct  = `${r}%`.padStart(6);
+      lines.push(`  ${name}  ${val}  ${tgt}  ${pct}  ${flag}`);
+    });
+  }
+
+  // おすすめ食材
+  if (includeRecommend && lastRates) {
+    const deficient = Object.entries(lastRates)
+      .filter(([k, r]) => r < 70 && FOOD_RECOMMENDATIONS[k])
+      .sort(([,a],[,b]) => a - b);
+    if (deficient.length > 0) {
+      lines.push('');
+      lines.push('【不足栄養素のおすすめ食材】');
+      deficient.forEach(([k, r]) => {
+        const meta = NUTRIENT_META[k];
+        const foods = FOOD_RECOMMENDATIONS[k].join('・');
+        lines.push(`  ${meta.icon} ${meta.label}（${r}%）`);
+        lines.push(`    → ${foods}`);
+      });
+    } else {
+      lines.push('');
+      lines.push('【おすすめ食材】');
+      lines.push('  🎉 すべての栄養素が70%以上摂れています！');
+    }
+  }
+
+  lines.push('');
+  lines.push('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  lines.push('※ 厚生労働省「日本人の食事摂取基準(2025年版)」参考');
+  return lines.join('\n');
+}
+
+// モーダルを開く
+let _saveMode = 'copy';
+function openSaveModal(mode) {
+  _saveMode = mode;
+  const modal = document.getElementById('saveModal');
+  const actions = document.getElementById('modalActions');
+  const toast = document.getElementById('modalToast');
+  toast.className = 'modal-toast';
+  toast.textContent = '';
+
+  if (mode === 'copy') {
+    actions.innerHTML = `
+      <button class="modal-btn modal-btn-cancel" onclick="closeSaveModal()">キャンセル</button>
+      <button class="modal-btn modal-btn-copy" onclick="execCopy()">📋 コピーする</button>
+    `;
+  } else {
+    actions.innerHTML = `
+      <button class="modal-btn modal-btn-cancel" onclick="closeSaveModal()">キャンセル</button>
+      <button class="modal-btn modal-btn-save" onclick="execDownload()">💾 保存する</button>
+    `;
+  }
+  modal.classList.add('open');
+  // モーダル外クリックで閉じる
+  modal.onclick = e => { if (e.target === modal) closeSaveModal(); };
+}
+
+function closeSaveModal() {
+  document.getElementById('saveModal').classList.remove('open');
+}
+
+function execCopy() {
+  const text = buildSaveText();
+  if (!text.trim().replace(/━/g,'').trim()) {
+    showToast('コピーする内容を1つ以上選んでください', false); return;
+  }
+  navigator.clipboard.writeText(text).then(() => {
+    showToast('✅ クリップボードにコピーしました！メモ帳などに貼り付けてください', true);
+    setTimeout(closeSaveModal, 1800);
+  }).catch(() => {
+    // フォールバック
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select(); document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast('✅ コピーしました！', true);
+    setTimeout(closeSaveModal, 1800);
+  });
+}
+
+function execDownload() {
+  const text = buildSaveText();
+  if (!text.trim().replace(/━/g,'').trim()) {
+    showToast('保存する内容を1つ以上選んでください', false); return;
+  }
+  const now = new Date();
+  const fname = `栄養チェック_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}.txt`;
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = fname;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast(`✅ 「${fname}」を保存しました！`, true);
+  setTimeout(closeSaveModal, 1800);
+}
+
+function showToast(msg, success) {
+  const t = document.getElementById('modalToast');
+  t.textContent = msg;
+  t.className = 'modal-toast' + (success ? ' success' : '');
+  t.style.display = 'block';
+}
+
+// =====================================================
+// 初期化
+// =====================================================
+document.addEventListener('DOMContentLoaded', () => {
+  renderMealInputs();
+
+  // サンプルデータ（朝食）
+  meals.breakfast = [
+    { food: 'ご飯', amount: 150 },
+    { food: '卵', amount: 50 },
+    { food: '牛乳', amount: 200 },
+  ];
+  meals.lunch = [
+    { food: 'パスタ(茹で)', amount: 200 },
+    { food: 'トマト', amount: 80 },
+  ];
+  meals.dinner = [
+    { food: '鮭', amount: 100 },
+    { food: 'ほうれん草', amount: 80 },
+    { food: 'ご飯', amount: 150 },
+    { food: 'みそ汁(1杯)', amount: 200 },
+  ];
+  renderMealInputs();
+
+  // ===== Service Worker 登録（PWA対応） =====
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./service-worker.js')
+        .then(reg => console.log('[PWA] Service Worker 登録成功:', reg.scope))
+        .catch(err => console.log('[PWA] Service Worker 登録失敗:', err));
+    });
+  }
+
+  // ===== インストールバナー（スマホでホーム画面追加を促す） =====
+  let deferredPrompt;
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferredPrompt = e;
+    // インストールバナーを表示
+    const banner = document.getElementById('installBanner');
+    if (banner) banner.style.display = 'flex';
+  });
+  window.addEventListener('appinstalled', () => {
+    const banner = document.getElementById('installBanner');
+    if (banner) banner.style.display = 'none';
+    deferredPrompt = null;
+  });
+  window.installApp = function() {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(choice => {
+        deferredPrompt = null;
+        document.getElementById('installBanner').style.display = 'none';
+      });
+    }
+  };
+});
+</script>
+</body>
+</html>
