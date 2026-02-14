@@ -3,7 +3,7 @@
 // オフライン対応・高速キャッシュ
 // =====================================================
 
-const CACHE_NAME = 'nutrition-checker-v1';
+const CACHE_NAME = 'nutrition-checker-v2';
 
 // キャッシュするファイル一覧
 const ASSETS_TO_CACHE = [
