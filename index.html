@@ -152,6 +152,92 @@
     }
     .analyze-btn:hover { opacity: 0.9; }
 
+    /* ===== 目標設定 ===== */
+    .goal-card {
+      background: white;
+      border-radius: 12px;
+      padding: 16px 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+      margin-bottom: 20px;
+    }
+    .goal-card h2 { font-size: 1rem; font-weight: 700; margin-bottom: 12px; color: #8e44ad; }
+    .goal-tabs {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .goal-tab {
+      padding: 7px 14px;
+      border-radius: 20px;
+      border: 2px solid #e0e0e0;
+      background: white;
+      cursor: pointer;
+      font-size: 0.82rem;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+    .goal-tab.active {
+      background: #8e44ad;
+      border-color: #8e44ad;
+      color: white;
+    }
+
+    /* ===== よく使う献立 ===== */
+    .preset-bar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .preset-bar-label { font-size: 0.8rem; font-weight: 700; color: #888; white-space: nowrap; }
+    .preset-chip {
+      background: #f0f4ff;
+      color: #3455db;
+      border: 1.5px solid #c5d0f5;
+      border-radius: 16px;
+      padding: 5px 12px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .preset-chip:hover { background: #3455db; color: white; border-color: #3455db; }
+    .preset-save-btn {
+      background: #fff3e0;
+      color: #e67e22;
+      border: 1.5px solid #f5cba7;
+      border-radius: 16px;
+      padding: 5px 12px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.2s;
+      white-space: nowrap;
+    }
+    .preset-save-btn:hover { background: #e67e22; color: white; }
+    .preset-delete-btn {
+      background: none;
+      border: none;
+      color: #ccc;
+      cursor: pointer;
+      font-size: 0.75rem;
+      padding: 0 0 0 4px;
+    }
+    .preset-delete-btn:hover { color: #e74c3c; }
+
+    /* ===== 単位入力ドロップダウン ===== */
+    .food-row select.unit-select {
+      width: 110px;
+      padding: 8px 6px;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      background: #fafafa;
+      color: #555;
+    }
+
     /* 結果エリア */
     #results { display: none; }
     .results-grid {
@@ -179,7 +265,8 @@
       font-size: 0.8rem;
       margin-bottom: 4px;
     }
-    .nutrient-name { font-weight: 600; }
+    .nutrient-name { font-weight: 600; display: block; }
+    .nutrient-effect { font-size: 0.72rem; color: #999; font-weight: 400; display: block; margin-top: 1px; }
     .nutrient-pct {
       font-weight: 700;
     }
@@ -551,9 +638,30 @@
     </div>
   </div>
 
+  <!-- 目標設定 -->
+  <div class="goal-card">
+    <h2>🎯 目標設定</h2>
+    <div class="goal-tabs">
+      <button class="goal-tab active" onclick="setGoal('normal', this)">🍽 通常</button>
+      <button class="goal-tab" onclick="setGoal('diet', this)">⚖️ ダイエット</button>
+      <button class="goal-tab" onclick="setGoal('muscle', this)">💪 筋トレ・増量</button>
+      <button class="goal-tab" onclick="setGoal('beauty', this)">✨ 美肌・美容</button>
+      <button class="goal-tab" onclick="setGoal('health', this)">🛡 免疫・健康維持</button>
+      <button class="goal-tab" onclick="setGoal('energy', this)">⚡ 疲労回復</button>
+    </div>
+  </div>
+
   <!-- 食事入力 -->
   <div class="meals-section">
     <h2>📝 今日の献立を入力</h2>
+
+    <!-- よく使う献立 -->
+    <div class="preset-bar" id="presetBar">
+      <span class="preset-bar-label">⭐ よく使う：</span>
+      <span id="presetChips"></span>
+      <button class="preset-save-btn" onclick="savePreset()">＋ 今の献立を保存</button>
+    </div>
+
     <div class="meal-tabs">
       <button class="meal-tab active" onclick="switchMeal('breakfast')">☀️ 朝食</button>
       <button class="meal-tab" onclick="switchMeal('lunch')">🌤 昼食</button>
@@ -697,26 +805,26 @@ const ACTIVITY_FACTOR = { low: 0.85, mid: 1.0, high: 1.2 };
 
 // 栄養素表示名と単位
 const NUTRIENT_META = {
-  energy:    { label: 'エネルギー', unit: 'kcal', icon: '⚡' },
-  protein:   { label: 'タンパク質', unit: 'g',    icon: '🥩' },
-  fat:       { label: '脂質',       unit: 'g',    icon: '🧈' },
-  carb:      { label: '炭水化物',   unit: 'g',    icon: '🍚' },
-  fiber:     { label: '食物繊維',   unit: 'g',    icon: '🥦' },
-  vitA:      { label: 'ビタミンA',  unit: 'μgRAE', icon: '🥕' },
-  vitD:      { label: 'ビタミンD',  unit: 'μg',   icon: '☀️' },
-  vitE:      { label: 'ビタミンE',  unit: 'mg',   icon: '🌿' },
-  vitK:      { label: 'ビタミンK',  unit: 'μg',   icon: '🥬' },
-  vitB1:     { label: 'ビタミンB1', unit: 'mg',   icon: '🌾' },
-  vitB2:     { label: 'ビタミンB2', unit: 'mg',   icon: '🥛' },
-  vitB6:     { label: 'ビタミンB6', unit: 'mg',   icon: '🐟' },
-  vitB12:    { label: 'ビタミンB12',unit: 'μg',   icon: '🦪' },
-  vitC:      { label: 'ビタミンC',  unit: 'mg',   icon: '🍊' },
-  folate:    { label: '葉酸',       unit: 'μg',   icon: '🥑' },
-  calcium:   { label: 'カルシウム', unit: 'mg',   icon: '🥛' },
-  iron:      { label: '鉄',         unit: 'mg',   icon: '🫀' },
-  zinc:      { label: '亜鉛',       unit: 'mg',   icon: '🦐' },
-  magnesium: { label: 'マグネシウム',unit: 'mg',  icon: '🌰' },
-  potassium: { label: 'カリウム',   unit: 'mg',   icon: '🍌' },
+  energy:    { label: 'エネルギー', unit: 'kcal',  icon: '⚡', effect: '活動・体温維持の基本エネルギー源' },
+  protein:   { label: 'タンパク質', unit: 'g',     icon: '🥩', effect: '筋肉・肌・髪・免疫の材料' },
+  fat:       { label: '脂質',       unit: 'g',     icon: '🧈', effect: 'ホルモン生成・脂溶性ビタミン吸収' },
+  carb:      { label: '炭水化物',   unit: 'g',     icon: '🍚', effect: '脳・筋肉への即効エネルギー' },
+  fiber:     { label: '食物繊維',   unit: 'g',     icon: '🥦', effect: '腸内環境改善・血糖値の安定' },
+  vitA:      { label: 'ビタミンA',  unit: 'μgRAE', icon: '🥕', effect: '目の健康・肌荒れ・ニキビ改善' },
+  vitD:      { label: 'ビタミンD',  unit: 'μg',    icon: '☀️', effect: '骨の強化・免疫力アップ・気分安定' },
+  vitE:      { label: 'ビタミンE',  unit: 'mg',    icon: '🌿', effect: '抗酸化・老化防止・血行促進' },
+  vitK:      { label: 'ビタミンK',  unit: 'μg',    icon: '🥬', effect: '骨密度維持・血液凝固のサポート' },
+  vitB1:     { label: 'ビタミンB1', unit: 'mg',    icon: '🌾', effect: '糖質をエネルギーに変換・疲労回復' },
+  vitB2:     { label: 'ビタミンB2', unit: 'mg',    icon: '🥛', effect: '肌・口内炎予防・細胞の再生促進' },
+  vitB6:     { label: 'ビタミンB6', unit: 'mg',    icon: '🐟', effect: 'タンパク質代謝・イライラ・PMS改善' },
+  vitB12:    { label: 'ビタミンB12',unit: 'μg',    icon: '🦪', effect: '貧血予防・神経機能・集中力維持' },
+  vitC:      { label: 'ビタミンC',  unit: 'mg',    icon: '🍊', effect: 'コラーゲン生成・美肌・免疫強化' },
+  folate:    { label: '葉酸',       unit: 'μg',    icon: '🥑', effect: '細胞分裂・貧血予防・妊娠期に重要' },
+  calcium:   { label: 'カルシウム', unit: 'mg',    icon: '🥛', effect: '骨・歯の形成・筋肉収縮・精神安定' },
+  iron:      { label: '鉄',         unit: 'mg',    icon: '🫀', effect: '貧血予防・疲れにくい体・集中力向上' },
+  zinc:      { label: '亜鉛',       unit: 'mg',    icon: '🦐', effect: '免疫強化・味覚正常・肌の新陳代謝' },
+  magnesium: { label: 'マグネシウム',unit: 'mg',   icon: '🌰', effect: '筋肉疲労回復・ストレス緩和・便秘改善' },
+  potassium: { label: 'カリウム',   unit: 'mg',    icon: '🍌', effect: 'むくみ解消・血圧低下・筋肉の正常化' },
 };
 
 // 不足時のおすすめ食材
@@ -860,16 +968,47 @@ function createFoodRow(food = '', amount = 100) {
   const datalistId = 'foodList_' + Math.random().toString(36).slice(2);
   const foodNames = Object.keys(FOOD_DB);
 
+  // 単位選択肢を生成（FOOD_PORTIONSにある食材はg以外も選べる）
+  const portions = FOOD_PORTIONS[food] || [];
+  const unitOptions = [
+    `<option value="g" selected>g</option>`,
+    ...portions.map(p => `<option value="${p.g}">${p.unit}(${p.g}g)</option>`)
+  ].join('');
+
   div.innerHTML = `
     <input type="text" class="food-name" list="${datalistId}" placeholder="食材名（例：ご飯）" value="${food}">
     <datalist id="${datalistId}">
       ${foodNames.map(n => `<option value="${n}">`).join('')}
     </datalist>
     <input type="number" class="food-amount" min="1" max="2000" value="${amount}">
-    <span class="unit">g</span>
+    <select class="unit-select" onchange="onUnitChange(this)">
+      ${unitOptions}
+    </select>
     <button class="remove-btn" onclick="this.parentElement.remove()">✕</button>
   `;
+
+  // 食材名が変わったとき単位選択肢を更新
+  const nameInput = div.querySelector('.food-name');
+  nameInput.addEventListener('change', () => updateUnitOptions(div));
+  nameInput.addEventListener('input',  () => updateUnitOptions(div));
+
   return div;
+}
+
+function updateUnitOptions(row) {
+  const food = row.querySelector('.food-name').value;
+  const sel  = row.querySelector('.unit-select');
+  const portions = FOOD_PORTIONS[food] || [];
+  sel.innerHTML = [
+    `<option value="g">g</option>`,
+    ...portions.map(p => `<option value="${p.g}">${p.unit}(${p.g}g)</option>`)
+  ].join('');
+}
+
+function onUnitChange(sel) {
+  if (sel.value !== 'g') {
+    sel.closest('.food-row').querySelector('.food-amount').value = sel.value;
+  }
 }
 
 function addFoodRow() {
@@ -974,7 +1113,10 @@ function renderBars(rates, totals, targets) {
     container.innerHTML += `
       <div class="nutrient-bar-item">
         <div class="nutrient-bar-header">
-          <span class="nutrient-name">${meta.icon} ${meta.label}</span>
+          <div>
+            <span class="nutrient-name">${meta.icon} ${meta.label}</span>
+            <span class="nutrient-effect">${meta.effect}</span>
+          </div>
           <span class="nutrient-pct ${pctClass(r)}">${r}% (${v.toFixed(1)}/${t}${meta.unit})</span>
         </div>
         <div class="bar-bg">
@@ -1369,6 +1511,116 @@ function sendSuggestion(el) {
 }
 
 // =====================================================
+// 目標設定
+// =====================================================
+
+// 目標別の栄養素補正係数
+const GOAL_SETTINGS = {
+  normal:  { label: '通常',        multipliers: {}, highlights: [] },
+  diet:    { label: 'ダイエット',   multipliers: { energy: 0.8, carb: 0.7, fat: 0.8, protein: 1.2, fiber: 1.3 },
+             highlights: ['fiber','protein','vitB1','vitB2'], note: 'カロリー20%減・タンパク質増・食物繊維増を重視' },
+  muscle:  { label: '筋トレ・増量', multipliers: { energy: 1.2, protein: 1.5, carb: 1.2, zinc: 1.2, magnesium: 1.2 },
+             highlights: ['protein','energy','zinc','magnesium'], note: 'タンパク質50%増・エネルギー20%増を重視' },
+  beauty:  { label: '美肌・美容',   multipliers: { vitA: 1.3, vitC: 1.5, vitE: 1.3, vitB2: 1.3, zinc: 1.2, iron: 1.2 },
+             highlights: ['vitA','vitC','vitE','vitB2','zinc'], note: 'ビタミンA・C・E・亜鉛・鉄を重視' },
+  health:  { label: '免疫・健康維持',multipliers: { vitC: 1.5, vitD: 1.3, zinc: 1.3, vitA: 1.2, folate: 1.2 },
+             highlights: ['vitC','vitD','zinc','vitA'], note: 'ビタミンC・D・亜鉛を重視' },
+  energy:  { label: '疲労回復',     multipliers: { vitB1: 1.5, vitB2: 1.3, vitB6: 1.3, iron: 1.3, magnesium: 1.3 },
+             highlights: ['vitB1','vitB2','vitB6','iron','magnesium'], note: 'ビタミンB群・鉄・マグネシウムを重視' },
+};
+
+let currentGoal = 'normal';
+
+function setGoal(goal, btn) {
+  currentGoal = goal;
+  document.querySelectorAll('.goal-tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+
+  // 目標ノートを表示
+  const setting = GOAL_SETTINGS[goal];
+  let noteEl = document.getElementById('goalNote');
+  if (!noteEl) {
+    noteEl = document.createElement('p');
+    noteEl.id = 'goalNote';
+    noteEl.style.cssText = 'font-size:0.78rem;color:#8e44ad;margin-top:8px;font-weight:600;';
+    document.querySelector('.goal-card').appendChild(noteEl);
+  }
+  noteEl.textContent = setting.note ? `💡 ${setting.note}` : '';
+}
+
+// 目標補正を加味したターゲット取得
+const _origGetTargets = getTargets;
+getTargets = function() {
+  const base = _origGetTargets();
+  const mults = GOAL_SETTINGS[currentGoal]?.multipliers || {};
+  const result = { ...base };
+  Object.entries(mults).forEach(([k, m]) => {
+    if (result[k] != null) result[k] = Math.round(result[k] * m);
+  });
+  return result;
+};
+
+// =====================================================
+// よく使う献立（プリセット）
+// =====================================================
+
+const PRESET_STORAGE_KEY = 'nutrition_presets_v1';
+
+function loadPresets() {
+  try { return JSON.parse(localStorage.getItem(PRESET_STORAGE_KEY)) || []; }
+  catch { return []; }
+}
+
+function savePresetsToStorage(presets) {
+  localStorage.setItem(PRESET_STORAGE_KEY, JSON.stringify(presets));
+}
+
+function renderPresetChips() {
+  const presets = loadPresets();
+  const container = document.getElementById('presetChips');
+  if (!container) return;
+  container.innerHTML = presets.length === 0
+    ? '<span style="font-size:0.75rem;color:#bbb;">（まだ保存なし）</span>'
+    : presets.map((p, i) => `
+        <span style="display:inline-flex;align-items:center;gap:2px;">
+          <span class="preset-chip" onclick="loadPreset(${i})" title="${p.name}">${p.name}</span>
+          <button class="preset-delete-btn" onclick="deletePreset(${i})" title="削除">✕</button>
+        </span>
+      `).join('');
+}
+
+function savePreset() {
+  saveMealInputs();
+  const totalItems = Object.values(meals).flat().filter(i => i.food && i.amount).length;
+  if (totalItems === 0) { alert('食材を入力してから保存してください'); return; }
+
+  const name = prompt('献立の名前を入力してください（例：いつもの朝食）');
+  if (!name) return;
+
+  const presets = loadPresets();
+  presets.push({ name: name.slice(0, 15), meals: JSON.parse(JSON.stringify(meals)) });
+  savePresetsToStorage(presets);
+  renderPresetChips();
+  alert(`「${name}」を保存しました！`);
+}
+
+function loadPreset(index) {
+  const presets = loadPresets();
+  if (!presets[index]) return;
+  if (!confirm(`「${presets[index].name}」を読み込みますか？\n現在の入力は上書きされます。`)) return;
+  meals = JSON.parse(JSON.stringify(presets[index].meals));
+  renderMealInputs();
+}
+
+function deletePreset(index) {
+  const presets = loadPresets();
+  if (!confirm(`「${presets[index].name}」を削除しますか？`)) return;
+  presets.splice(index, 1);
+  savePresetsToStorage(presets);
+  renderPresetChips();
+}
+
+// =====================================================
 // 保存・コピー機能
 // =====================================================
 
@@ -1556,6 +1808,7 @@ function showToast(msg, success) {
 // =====================================================
 document.addEventListener('DOMContentLoaded', () => {
   renderMealInputs();
+  renderPresetChips();
 
   // サンプルデータ（朝食）
   meals.breakfast = [
